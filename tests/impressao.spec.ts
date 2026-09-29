@@ -188,17 +188,30 @@ test('a ficha do paciente sai em duas colunas', async ({ page }) => {
  */
 async function gerarPdeEvolucao(page: Page): Promise<void> {
   await page.goto('/patients');
+
+  // A lista e assincrona. Contar os cards antes do primeiro render devolvia 0,
+  // o laco nem comecava e o teste caia no erro de "nenhum paciente" mesmo com
+  // a evolucoes presentes no storage.
+  await expect(page.locator('.patient-card').first()).toBeVisible();
   const total = await page.locator('.patient-card').count();
+
   for (let i = 0; i < total; i++) {
     await page.goto('/patients');
+    await expect(page.locator('.patient-card').nth(i)).toBeVisible();
     await page.locator('.patient-card').nth(i).click();
     await expect(page).toHaveURL(/\/patients\//);
-    // a URL muda antes do React re-renderizar: espera a ficha aparecer, senao
-    // ainda estariamos olhando a lista
+    // a URL muda antes do React re-renderizar: espera a ficha aparecer
     await expect(page.getByRole('button', { name: /Nova evolução/ })).toBeVisible();
-    const gerar = page.getByRole('button', { name: 'Gerar PDF' });
-    if ((await gerar.count()) > 0) {
-      await gerar.first().click();
+
+    // as evolucoes carregam depois do cabecalho, entao "Gerar PDF" demora a
+    // aparecer: sem esperar, a checagem estouraria cedo demais
+    const gerar = page.getByRole('button', { name: 'Gerar PDF' }).first();
+    const achou = await gerar
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (achou) {
+      await gerar.click();
       return;
     }
   }

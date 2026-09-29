@@ -259,18 +259,32 @@ test('Cancelar a limpeza não apaga nada', async ({ page }) => {
   expect(patients).toBe(3);
 });
 
+/**
+ * Restaurar passa a pedir a senha atual: escolher o arquivo sozinho nao grava
+ * nada, so abre a confirmacao. O erro do arquivo invalido aparece depois que a
+ * senha confere.
+ */
+async function restaurarComSenha(page: import('@playwright/test').Page, arquivo: {
+  name: string; mimeType: string; buffer: Buffer;
+}) {
+  await page.setInputFiles('input[aria-label="Arquivo de backup"]', arquivo);
+  await expect(page.locator('#dp-senha-input')).toBeVisible();
+  await page.locator('#dp-senha-input').fill('123456');
+  await page.getByRole('button', { name: 'Confirmar restauração' }).click();
+}
+
 test('restaurar um backup inválido mostra o erro e não apaga os dados', async ({ page }) => {
   await login(page);
   await abrirConfig(page, 'Dados');
 
-  await page.setInputFiles('input[aria-label="Arquivo de backup"]', {
+  await restaurarComSenha(page, {
     name: 'ruim.json',
     mimeType: 'application/json',
     buffer: Buffer.from('{ isso nao e json'),
   });
   await expect(page.locator('.toast', { hasText: 'inválido' })).toBeVisible();
 
-  await page.setInputFiles('input[aria-label="Arquivo de backup"]', {
+  await restaurarComSenha(page, {
     name: 'incompleto.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify({ app: 'clinica-psi', versao: 1, dados: {} })),

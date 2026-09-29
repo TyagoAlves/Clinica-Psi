@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 async function loginAdmin(page: import('@playwright/test').Page) {
   await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
-  // a apresentacao volta a abrir depois do clear e bloqueia os cliques
+  // o tour volta a abrir depois do clear e bloqueia os cliques
   await semApresentacao(page);
   await page.reload();
   await page.locator('#email').fill('ana@clinica.com.br');
@@ -66,8 +66,9 @@ test('cria um profissional novo e o login passa a funcionar', async ({ page }) =
   await page.locator('#password').fill('abc123');
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL(/\/dashboard/);
-  // nao-admin nao ve Configuracoes
-  await expect(page.getByRole('link', { name: 'Configurações' })).toHaveCount(0);
+  // nao-admin ve Configuracoes, mas so as abas de dados e de perfil proprio
+  // (o detalhe esta em config-permissao.spec.ts)
+  await expect(page.getByRole('link', { name: 'Configurações' })).toBeVisible();
 
   expect(errors).toEqual([]);
 });
@@ -166,9 +167,12 @@ test('desativar e reativar preserva o historico clinico', async ({ page }) => {
     .click();
   await expect(page.getByText('Acesso reativado.')).toBeVisible();
 
-  // as evolucoes dele continuam intactas no prontuario
+  // as evolucoes continuam intactas no prontuario. A linha do tempo mostra
+  // apenas o sobrenome de quem registrou, entao o nome completo do autor
+  // so aparecia no menu lateral - esta checagem nunca olhou o prontuario.
   await page.getByRole('link', { name: 'Pacientes' }).click();
   await page.getByRole('button', { name: /Juliana Martins/ }).click();
-  await expect(page.getByText('Ana Ribeiro')).toBeVisible();
+  await expect(page.locator('.tl-item').first()).toBeVisible();
+  await expect(page.locator('.tl-date').first()).toContainText('Ribeiro');
   expect(errors).toEqual([]);
 });

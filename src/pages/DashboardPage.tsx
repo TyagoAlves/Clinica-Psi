@@ -12,6 +12,8 @@ import {
   professionalRepository,
   serviceRepository,
 } from '../repositories';
+import { useAuth } from '../store';
+import { pacientesVisiveis } from '../services/AccessService';
 import type { Appointment, Evolution, Patient, Service } from '../domain/types';
 
 interface DashboardData {
@@ -65,6 +67,7 @@ export function DashboardPage() {
   const [professionals, setProfessionals] = useState<any[]>([]);
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const { professional: me, isAdmin } = useAuth();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,13 +82,17 @@ export function DashboardPage() {
         consentRepository.getPendingCount(),
       ]);
 
+      const visiveis = pacientesVisiveis(patients, me, isAdmin);
+
       const month = localISODate(new Date()).slice(0, 7);
       const in7days = new Date();
       in7days.setDate(in7days.getDate() + 7);
 
       setData({
-        totalPatients: patients.length,
-        activePatients: patients.filter((p) => p.status === 'active').length,
+        // os numeros do painel tambem respeitam a visibilidade, senao o
+        // cartao entrega o total da clinica para quem nao pode abrir os prontuarios
+        totalPatients: visiveis.length,
+        activePatients: visiveis.filter((p) => p.status === 'active').length,
         totalEvolutions: evolutions.length,
         evolutionsThisMonth: evolutions.filter((e) => (e.date || '').slice(0, 7) === month).length,
         sessionsToday: today.length,
@@ -93,15 +100,15 @@ export function DashboardPage() {
         pendingConsents: pending,
       });
 
-      setPatientNames(Object.fromEntries(patients.map((p) => [p.id, p.name])));
-      setRecentPatients(patients.slice(0, 6));
+      setPatientNames(Object.fromEntries(visiveis.map((p) => [p.id, p.name])));
+      setRecentPatients(visiveis.slice(0, 6));
       setTodaySessions(today);
       setRecentEvolutions(evolutions.slice(0, 5));
       setProfessionals(pros);
       setServices(services);
 
       const counts = new Map<string, number>();
-      for (const p of patients) counts.set(p.serviceId, (counts.get(p.serviceId) || 0) + 1);
+      for (const p of visiveis) counts.set(p.serviceId, (counts.get(p.serviceId) || 0) + 1);
       setByService(
         services.map((s: Service) => ({ name: s.name, total: counts.get(s.id) || 0 }))
       );
@@ -110,7 +117,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [me, isAdmin]);
 
   useEffect(() => {
     load();

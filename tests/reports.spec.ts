@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 
   await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
-  // a apresentacao volta a abrir depois do clear e bloqueia os cliques
+  // o tour volta a abrir depois do clear e bloqueia os cliques
   await semApresentacao(page);
   await page.reload();
   await page.locator('#email').fill('ana@clinica.com.br');

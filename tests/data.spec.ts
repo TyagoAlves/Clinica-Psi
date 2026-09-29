@@ -139,16 +139,3 @@ test('os modelos LGPD sao editados por blocos e persistidos', async ({ page }) =
   });
   expect(versoes).toEqual({ global: '2.0', treatment: '2.0', data: '2.0' });
 });
-
-test('usuario nao-admin nao acessa a pagina de administracao', async ({ page }) => {
-  await page.goto('/login');
-  await semApresentacao(page);
-  await page.locator('#email').fill('marcos@clinica.com.br');
-  await page.locator('#password').fill('123456');
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-
-  await page.goto('/admin');
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole('link', { name: 'Configurações' })).toHaveCount(0);
-});

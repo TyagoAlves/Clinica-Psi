@@ -1,5 +1,6 @@
-import { useUI, useData } from '../store';
+import { useUI, useData, useAuth } from '../store';
 import { patientRepository, serviceRepository } from '../repositories';
+import { pacientesVisiveis } from '../services/AccessService';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Patient, Service } from '../domain/types';
@@ -34,6 +35,7 @@ export function PatientsPage() {
   const navigate = useNavigate();
   const { addToast } = useUI();
   const { patientsFilter, setPatientsFilter } = useData();
+  const { professional: me, isAdmin } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [evolutionCount, setEvolutionCount] = useState<Record<string, { count: number; lastDate?: string }>>({});
   const [services, setServices] = useState<Service[]>([]);
@@ -46,7 +48,14 @@ export function PatientsPage() {
         patientRepository.findWithEvolutionCount(),
         serviceRepository.findActive(),
       ]);
-      setPatients(data.map((d) => d.patient));
+      // Quem nao administra so enxerga os pacientes sob a responsabilidade dele
+      // e os que ainda nao tem responsavel definido.
+      const visiveis = pacientesVisiveis(
+        data.map((d) => d.patient),
+        me,
+        isAdmin
+      );
+      setPatients(visiveis);
       setEvolutionCount(
         Object.fromEntries(data.map((d) => [d.patient.id, { count: d.count, lastDate: d.lastDate }]))
       );
@@ -57,7 +66,7 @@ export function PatientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, me, isAdmin]);
 
   useEffect(() => {
     loadPatients();

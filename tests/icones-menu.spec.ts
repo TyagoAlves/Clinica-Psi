@@ -22,6 +22,13 @@ async function login(page: Page) {
 }
 
 async function icones(page: Page) {
+  // Medir antes do layout pronto dava 0x0 em parte dos icones, e a falha
+  // aparecia so quando a maquina estava ocupada. Aqui a medida so acontece
+  // depois que todos os svg do menu tem caixa de verdade.
+  await page.waitForFunction(() => {
+    const svgs = Array.from(document.querySelectorAll('.nav-item svg'));
+    return svgs.length > 0 && svgs.every((svg) => svg.getBoundingClientRect().width > 0);
+  });
   return page.evaluate(() =>
     Array.from(document.querySelectorAll('.nav-item')).map((a) => {
       const svg = a.querySelector('svg') as SVGSVGElement | null;

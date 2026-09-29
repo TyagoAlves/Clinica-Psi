@@ -11,7 +11,8 @@ import {
   serviceRepository,
 } from '../repositories';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useUI, useConfig } from '../store';
+import { useUI, useConfig, useAuth } from '../store';
+import { pacientesVisiveis } from '../services/AccessService';
 import {
   EMPTY_CONFIG,
   formatDate,
@@ -48,6 +49,7 @@ export function LGPDPage() {
   const { config } = useConfig();
 
   const [patients, setPatients] = useState<Patient[]>([]);
+  const { professional: me, isAdmin } = useAuth();
   const [consents, setConsents] = useState<Consent[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -63,7 +65,8 @@ export function LGPDPage() {
         serviceRepository.findAll({ orderBy: 'name', orderDir: 'asc' }),
         professionalRepository.findAll({ orderBy: 'name', orderDir: 'asc' }),
       ]);
-      setPatients(listaPacientes);
+      // consentimento de paciente de outro profissional nao aparece aqui
+      setPatients(pacientesVisiveis(listaPacientes, me, isAdmin));
       setConsents(todos);
       setServices(listaServicos);
       setProfessionals(listaEquipe);
@@ -72,7 +75,7 @@ export function LGPDPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [me, isAdmin]);
 
   useEffect(() => {
     load();

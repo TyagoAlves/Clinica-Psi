@@ -5,6 +5,7 @@
  */
 
 import type { Appointment, Evolution, Patient, Professional, Service, UUID } from '../domain/types';
+import { gerarHashSenha, serializarHash } from './CryptoService';
 import {
   appointmentRepository,
   configRepository,
@@ -267,7 +268,21 @@ async function ensureDemoProfessionals(forcar = false): Promise<void> {
     : PROFESSIONALS;
 
   if (missing.length > 0) {
-    await professionalRepository.createMany(missing);
+    // Os acessos de demonstracao tambem entram guardados como hash. A senha do
+    // seed continua visivel no codigo (ela e de demonstracao, e precisa ser
+    // conhecida para o primeiro acesso), mas o que fica no armazenamento e o
+    // derivado, igual ao de qualquer usuario cadastrado.
+    await professionalRepository.createMany(
+      await Promise.all(
+        missing.map(async (p) => {
+          const { password, ...resto } = p;
+          return {
+            ...resto,
+            passwordHash: serializarHash(await gerarHashSenha(password || '')),
+          } as unknown as Professional;
+        })
+      )
+    );
     console.info(
       `[bootstrap] ${missing.length} profissional(is) de demonstração criado(s): ` +
         missing.map((p) => p.email).join(', ')

@@ -71,7 +71,14 @@ export interface Professional {
   id: UUID;
   name: string;
   email: string;
-  password: string; // hashed in production
+  /**
+   * Derivado da senha (PBKDF2-HMAC-SHA256 com sal), nunca a senha em si.
+   * Campo novo; o `password` abaixo existe so para os acessos gravados antes
+   * do hash existir e e apagado no primeiro login bem-sucedido.
+   */
+  passwordHash?: string;
+  /** @deprecated senha em texto puro. Legado: migrada no login. */
+  password?: string;
   crp: string;
   role: string;
   active: boolean;
@@ -85,6 +92,11 @@ export interface Professional {
 export interface Patient {
   id: UUID;
   name: string;
+  /**
+   * Profissional sob cuja responsabilidade o paciente esta. Opcional: os
+   * cadastros antigos nao tem, e continuam visiveis para todo mundo.
+   */
+  professionalId?: UUID;
   phone: string;
   email: string;
   birthDate: string;

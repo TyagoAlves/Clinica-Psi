@@ -11,12 +11,14 @@
 import { storage } from '../adapters';
 import {
   appointmentRepository,
+  configRepository,
   consentRepository,
   evolutionRepository,
   patientRepository,
   professionalRepository,
   serviceRepository,
 } from '../repositories';
+import type { Evolution } from '../domain/types';
 import { seedDemoData } from './bootstrap';
 import { isTauri } from '../utils/tauri';
 import { salvarArquivo } from '../utils/backupArquivo';
@@ -98,6 +100,12 @@ export async function usoArmazenamento(): Promise<UsoArmazenamento> {
 export async function exportarBackup(): Promise<BackupFile> {
   const dados: Record<string, unknown> = {};
   for (const key of await todasAsChaves()) dados[key] = await storage.get(key);
+
+  // A identidade so existe no storage depois que alguem salva algo em
+  // Configuracoes: num sistema novo a chave nao esta la, e o `importarBackup`
+  // recusa o arquivo por faltar a identidade da clinica. Um backup precisa
+  // ser auto-suficiente, entao a config resolvida entra sempre no arquivo.
+  dados.config = await configRepository.get();
 
   const geradoEm = new Date().toISOString();
   return {
@@ -221,4 +229,97 @@ export function lerArquivoComoTexto(arquivo: File): Promise<string> {
     leitor.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
     leitor.readAsText(arquivo);
   });
+}
+
+/**
+ * Exporta so o que o profissional registrou: os pacientes em que ele tem
+ * evolucao e as evolucoes que ele escreveu.
+ *
+ * E o recorte da LGPD para o titular: um arquivo legivel, com o conteudo das
+ * evolucoes em texto (o storage guarda HTML congelado) e sem o dado de acesso
+ * dos outros profissionais.
+ */
+export async function exportarDadosDoProfissional(
+  professionalId: string
+): Promise<{ nome: string; resumo: string; texto: string }> {
+  const [evolutions, patients, consents] = await Promise.all([
+    evolutionRepository.findByProfessional(professionalId),
+    patientRepository.findAll(),
+    consentRepository.findAll(),
+  ]);
+
+  const meus = evolutions.filter((e) => e.professionalId === professionalId);
+  const porPaciente = new Map<string, Evolution[]>();
+  for (const e of meus) {
+    const lista = porPaciente.get(e.patientId) || [];
+    lista.push(e);
+    porPaciente.set(e.patientId, lista);
+  }
+
+  const consentimentosDoProfissional = consents.filter((c) => c.registeredBy === professionalId);
+  const agora = new Date();
+  const carimbo = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+
+  const partes: string[] = [
+    'DADOS REGISTRADOS POR MIM',
+    `Exportado em ${agora.toLocaleString('pt-BR')}`,
+    `Total: ${porPaciente.size} paciente(s), ${meus.length} evolução(ões), ${consentimentosDoProfissional.length} termo(s).`,
+    '',
+  ];
+
+  for (const [patientId, lista] of porPaciente) {
+    const paciente = patients.find((p) => p.id === patientId);
+    partes.push('='.repeat(64));
+    partes.push(`PACIENTE: ${paciente?.name || '—'}`);
+    if (paciente?.birthDate) partes.push(`NASCIMENTO: ${new Date(paciente.birthDate).toLocaleDateString('pt-BR')}`);
+    if (paciente?.document) partes.push(`DOCUMENTO: ${paciente.document}`);
+    partes.push('');
+
+    for (const evo of lista) {
+      partes.push(`--- ${evo.title} (${new Date(evo.date).toLocaleDateString('pt-BR')}) ---`);
+      // o storage guarda HTML; o arquivo precisa sair legível
+      partes.push(htmlParaTexto(evo.content));
+      partes.push('');
+    }
+  }
+
+  if (porPaciente.size === 0) {
+    partes.push('Nenhuma evolução registrada por este profissional até o momento.');
+  }
+
+  const texto = partes.join('\n');
+  return {
+    nome: `clinica-psi-meus-dados-${carimbo}.txt`,
+    resumo: `${porPaciente.size} paciente(s) e ${meus.length} evolução(ões)`,
+    texto,
+  };
+}
+
+/** Baixa um texto qualquer como arquivo. */
+export function baixarTexto(nome: string, texto: string): void {
+  const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Tira a marcação das evoluções, que são gravadas como HTML. */
+function htmlParaTexto(html: string): string {
+  const comQuebras = String(html || '')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ');
+  const semTag = comQuebras.replace(/<[^>]*>/g, '');
+  const texto = semTag
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"');
+  return texto.replace(/\n{3,}/g, '\n\n').trim();
 }

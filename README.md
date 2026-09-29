@@ -6,6 +6,23 @@ consentimento LGPD e relatórios. O mesmo frontend React serve dois alvos:
 - **app empacotado** (Tauri + Rust), com os dados em SQLite;
 - **versão web** (Vite), que é o que a suíte Playwright exercita.
 
+## Funcionalidades
+
+- Agenda do dia, com sessões, conflitos, impressão em PDF e.notas.
+- Prontuário por paciente: evoluções, termos LGPD e dados de contato.
+- Relatórios de produção e termo assinado.
+- **Acesso com senha guardada em hash** (PBKDF2, via WebCrypto). A senha em
+  claro do seed é o que se digita no primeiro acesso; o que fica gravado é o
+  derivado. Restaurar um backup exige redigitar a senha atual.
+- **Cadastro em dois passos** e o painel "Meu acesso", onde cada profissional
+  troca a própria senha.
+- **Configurações compartilháveis**: exporta/importa só a identidade, a marca,
+  os textos e os modelos de termo — sem nenhum dado de paciente, nem
+  senha.
+- Abas restritas por permissão dentro de Configurações: quem não administra
+  entra na tela, mas só enxerga "Meu acesso" e "Dados".
+- Exportação dos dados que cada profissional registrou, recortado pela LGPD.
+
 ## Stack
 
 React 19 · TypeScript · Vite 8 · Tailwind 4 · Tauri 2 (Rust) · SQLite (rusqlite)
@@ -82,5 +99,6 @@ deploy de GitHub Pages — o alvo principal é o app empacotado.
 
 ## Estado do repositório
 
-Isto é o fork Tauri. A versão web original continua em
-`TyagoAlves/Prontuario-para-Psiclogos`.
+Isto é o fork empacotado. O app de navegador continua em
+`TyagoAlves/Prontuario-para-Psiclogos`, de onde vêm as funcionalidades; aqui
+eles convivem com o Tauri e o SQLite.

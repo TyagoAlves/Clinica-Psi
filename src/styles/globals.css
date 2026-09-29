@@ -239,6 +239,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .login-hint code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
 .login-hint[hidden] { display: none; }
 
+/* cadastro em dois passos */
+.cadastro-steps { margin-top: 18px; }
+.passos-indice {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin-bottom: 12px;
+}
+.passos-indice span {
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  white-space: nowrap;
+}
+.passos-indice span.ativo {
+  border-color: var(--primary); color: var(--primary);
+  background: var(--primary-soft); font-weight: 700;
+}
+.passos-indice span.feito {
+  border-color: var(--success); color: var(--success);
+  background: var(--success-soft, #ecfdf5);
+}
+
 /* ------------------------------------------------------------------ */
 /* form controls                                                        */
 /* ------------------------------------------------------------------ */

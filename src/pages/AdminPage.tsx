@@ -1,6 +1,19 @@
 import { useUI, useConfig, useAuth } from '../store';
 import { Button, ModalPortal } from '../components/ui';
-import { Save, RotateCcw, Plus, ImageUp, Trash2 } from 'lucide-react';
+import {
+  Save,
+  RotateCcw,
+  Plus,
+  ImageUp,
+  Trash2,
+  UserCog,
+  Building2,
+  Palette,
+  FileText,
+  Shield,
+  Users,
+  Database,
+} from 'lucide-react';
 import {
   appointmentRepository,
   configRepository,
@@ -15,7 +28,30 @@ import { lerArquivoComoDataUrl, validarLogo, LOGO_MIME, LOGO_MAX_BYTES } from '.
 import { BrandMark, BrandPreview, IdentityPreview } from '../components/config/Previews';
 import { DataPanel } from '../components/config/DataPanel';
 import { ConsentModelEditor } from '../components/ConsentModelEditor';
+import { MeuAcessoPanel } from '../components/config/MeuAcessoPanel';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+
+/**
+ * Abas por papel.
+ *
+ * Quem nao administra ve apenas "Meu acesso" (os proprios dados) e "Dados"
+ * (backup). Identidade, Marca, Textos, Termos LGPD e Equipe sao restritas: sao
+ * formulario, preenchimento de dados do sistema e gestao de psicologos.
+ */
+const ABAS_ADMIN = [
+  { id: 'meu-acesso', label: 'Meu acesso', Icone: UserCog },
+  { id: 'identidade', label: 'Identidade', Icone: Building2 },
+  { id: 'marca', label: 'Marca', Icone: Palette },
+  { id: 'textos', label: 'Textos', Icone: FileText },
+  { id: 'lgpd', label: 'Termos LGPD', Icone: Shield },
+  { id: 'equipe', label: 'Equipe', Icone: Users },
+  { id: 'dados', label: 'Dados', Icone: Database },
+];
+
+const ABAS_COMUM = [
+  { id: 'meu-acesso', label: 'Meu acesso', Icone: UserCog },
+  { id: 'dados', label: 'Dados', Icone: Database },
+];
 
 const SECTION_LABELS: Record<string, string> = {
   identidade: 'Identidade',
@@ -27,8 +63,8 @@ const SECTION_LABELS: Record<string, string> = {
 export function AdminPage() {
   const { addToast } = useUI();
   const { loadConfig: refreshStoreConfig } = useConfig();
-  const { professional: me, checkAuth, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('identidade');
+  const { professional: me, isAdmin, checkAuth, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'identidade' : 'meu-acesso');
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [team, setTeam] = useState<Professional[]>([]);
@@ -101,8 +137,8 @@ export function AdminPage() {
   }, [loadConfig]);
 
   useEffect(() => {
-    if (activeTab === 'equipe') loadTeam();
-  }, [activeTab, loadTeam]);
+    if (activeTab === 'equipe' && isAdmin) loadTeam();
+  }, [activeTab, isAdmin, loadTeam]);
 
   const handleSave = async (section: string, data: any) => {
     const label = SECTION_LABELS[section] ?? section;
@@ -296,14 +332,13 @@ export function AdminPage() {
 
   if (loading) return <div className="card"><div className="empty small">Carregando…</div></div>;
 
-  const tabs = [
-    { id: 'identidade', label: 'Identidade', icon: 'User' },
-    { id: 'marca', label: 'Marca', icon: 'Settings' },
-    { id: 'textos', label: 'Textos', icon: 'FileText' },
-    { id: 'lgpd', label: 'Termos LGPD', icon: 'Shield' },
-    { id: 'equipe', label: 'Equipe', icon: 'Users' },
-    { id: 'dados', label: 'Dados', icon: 'Database' },
-  ];
+  const tabs = isAdmin ? ABAS_ADMIN : ABAS_COMUM;
+  /**
+   * Nao confia no `activeTab` para esconder o conteudo restrito: se sobrar uma
+   * aba de administrador no estado, ela cai para a primeira liberada em vez de
+   * abrir um formulario que nao deveria aparecer.
+   */
+  const abaAtual = tabs.some((t) => t.id === activeTab) ? activeTab : tabs[0].id;
 
   return (
     <div>
@@ -312,16 +347,24 @@ export function AdminPage() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+              className={`tab ${abaAtual === tab.id ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.id)}
             >
+              <tab.Icone className="w-4 h-4 mr-2" />
               {tab.label}
             </button>
           ))}
         </div>
 
+        {!isAdmin && (
+          <p className="small muted" style={{ padding: '0 20px 16px' }}>
+            Você tem acesso ao backup do sistema e aos seus próprios dados. Configurações da clínica,
+            textos, termos e equipe são exclusivos de administradores.
+          </p>
+        )}
+
         <div className="card-body">
-          {activeTab === 'equipe' && (
+          {isAdmin && abaAtual === 'equipe' && (
             <div>
               <div className="row-between" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
                 <div>
@@ -418,7 +461,7 @@ export function AdminPage() {
             </div>
           )}
 
-          {activeTab === 'identidade' && config && clinica && (
+          {isAdmin && abaAtual === 'identidade' && config && clinica && (
             <form onSubmit={e => { e.preventDefault(); handleSave('identidade', clinica); }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -465,7 +508,7 @@ export function AdminPage() {
             </form>
           )}
 
-          {activeTab === 'marca' && config && marca && (
+          {isAdmin && abaAtual === 'marca' && config && marca && (
             <form onSubmit={e => { e.preventDefault(); handleSave('marca', marca); }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -572,7 +615,7 @@ export function AdminPage() {
             </form>
           )}
 
-          {activeTab === 'textos' && config && (
+          {isAdmin && abaAtual === 'textos' && config && (
             <form onSubmit={e => { e.preventDefault(); handleSave('textos', Object.fromEntries(new FormData(e.currentTarget))); }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -598,7 +641,7 @@ export function AdminPage() {
             </form>
           )}
 
-          {activeTab === 'lgpd' && config && modelos && (
+          {isAdmin && abaAtual === 'lgpd' && config && modelos && (
             <form onSubmit={onSubmitConsent}>
               <div className="row-between mb-4" style={{ alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, maxWidth: 260 }}>
@@ -631,8 +674,11 @@ export function AdminPage() {
             </form>
           )}
 
-          {activeTab === 'dados' && (
+          {abaAtual === 'meu-acesso' && <MeuAcessoPanel />}
+
+          {abaAtual === 'dados' && (
             <DataPanel
+              somenteBackup={!isAdmin}
               onReautenticar={async () => { await logout(); }}
               onAviso={(tipo, mensagem) => addToast({ type: tipo, message: mensagem })}
             />

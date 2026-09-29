@@ -5,6 +5,7 @@
 import { BaseRepository } from './BaseRepository';
 import type { Professional } from '../domain/types';
 import { storage } from '../adapters';
+import { gerarHashSenha, serializarHash, verificarSenha } from '../services/CryptoService';
 
 export interface SaveProfessionalInput {
   id?: string;
@@ -45,13 +46,42 @@ export class ProfessionalRepository extends BaseRepository<Professional> {
     return this.findAll({ where: { admin: true, active: true } });
   }
 
+  /**
+   * Confere a senha e devolve o profissional, ou null.
+   *
+   * Compara com o hash guardado. Quando o acesso ainda tem a senha em texto
+   * puro (criado antes do hash existir), compara no modo antigo e, se
+   * conferir, regrava como hash naquela hora: a migracao acontece sozinha no
+   * primeiro login, sem travar ninguem.
+   */
   async authenticate(email: string, password: string): Promise<Professional | null> {
-    // In production, use proper password hashing (bcrypt, argon2)
     const professional = await this.findByEmail(email);
-    if (professional && professional.password === password && professional.active) {
-      return professional;
+    if (!professional || professional.active === false) return null;
+
+    if (professional.passwordHash) {
+      const { confere } = await verificarSenha(password, professional.passwordHash);
+      return confere ? professional : null;
+    }
+
+    if (professional.password && professional.password === password) {
+      // devolve o registro ja migrado: o objeto antigo ainda carrega a senha em
+      // texto puro e iria parar na sessao, onde ficaria exposto ate recarregar
+      return (await this.migrarParaHash(professional, password)) ?? professional;
     }
     return null;
+  }
+
+  /** Troca a senha guardada em texto puro por um hash. */
+  private async migrarParaHash(professional: Professional, senha: string): Promise<Professional | null> {
+    try {
+      const hash = serializarHash(await gerarHashSenha(senha));
+      await this.update(professional.id, { passwordHash: hash, password: undefined });
+      return await this.findById(professional.id);
+    } catch (e) {
+      // falhar aqui nao pode impedir o login de quem digitou a senha certa
+      console.error('Failed to hash password on login:', e);
+      return null;
+    }
   }
 
   /**
@@ -61,7 +91,7 @@ export class ProfessionalRepository extends BaseRepository<Professional> {
    */
   async hasUsableCredentials(): Promise<boolean> {
     const all = await this.findAll();
-    return all.some((p) => !!p?.email && !!p?.password);
+    return all.some((p) => !!p?.email && !!(p?.passwordHash || p?.password));
   }
 
   async countActive(): Promise<number> {
@@ -152,8 +182,14 @@ export class ProfessionalRepository extends BaseRepository<Professional> {
     }
 
     const payload: Partial<Professional> = { name, email, crp, role, active, admin };
-    if (password) payload.password = password;
-    else if (existing) payload.password = existing.password;
+    if (password) {
+      payload.passwordHash = serializarHash(await gerarHashSenha(password));
+      // Some o texto puro do mesmo registro: editar a equipe nao pode deixar
+      // a senha antiga jogada no armazenamento.
+      payload.password = undefined;
+    } else if (existing) {
+      payload.passwordHash = existing.passwordHash;
+    }
 
     if (existing) {
       return { ok: true, professional: (await this.update(existing.id, payload))!, changedSelf: false };

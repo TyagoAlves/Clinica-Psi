@@ -62,6 +62,7 @@ test('a ajuda tem índice com todas as áreas e seções', async ({ page }) => {
     'Serviços',
     'LGPD e consentimentos',
     'Relatórios',
+    'Meus dados e backup',
     'Onde os dados ficam',
   ];
 
@@ -72,7 +73,10 @@ test('a ajuda tem índice com todas as áreas e seções', async ({ page }) => {
   }
 
   // os ids sao estaveis e nao derivam do titulo
-  const ids = ['painel', 'pacientes', 'prontuario', 'agenda', 'servicos', 'lgpd', 'relatorios', 'onde-ficam'];
+  const ids = [
+    'painel', 'pacientes', 'prontuario', 'agenda', 'servicos', 'lgpd',
+    'relatorios', 'meus-dados', 'onde-ficam',
+  ];
   for (const id of ids) {
     await expect(secao(page, id)).toBeVisible();
   }
@@ -89,6 +93,21 @@ test('a ajuda não documenta equipe nem administração', async ({ page }) => {
   }
   // e o índice também não tem seção de configuração
   await expect(ajuda(page).locator('.ajuda-link').filter({ hasText: 'Configuraç' })).toHaveCount(0);
+});
+
+test('a ajuda explica o acesso de cada profissional ao backup', async ({ page }) => {
+  await login(page);
+  await page.goto('/ajuda');
+
+  const texto = await secao(page, 'meus-dados').innerText();
+  // o que todo profissional pode fazer na tela de Configurações
+  for (const esperado of ['Meu acesso', 'Baixar backup', 'Restaurar backup', 'senha atual']) {
+    expect(texto, `seção de backup não menciona "${esperado}"`).toContain(esperado);
+  }
+  // mas segue sem virar manual de administração
+  for (const proibido of ['Equipe', 'Administrador', 'Restaurar demonstração']) {
+    expect(texto).not.toContain(proibido);
+  }
 });
 
 test('cada área explica o que dá para fazer', async ({ page }) => {

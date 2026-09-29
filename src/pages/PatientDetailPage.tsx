@@ -8,7 +8,8 @@ import {
   serviceRepository,
 } from '../repositories';
 import { useCallback, useEffect, useState } from 'react';
-import { useConfig, useUI } from '../store';
+import { useConfig, useUI, useAuth } from '../store';
+import { podeVerPaciente } from '../services/AccessService';
 import {
   EMPTY_CONFIG,
   printAllEvolutions,
@@ -53,6 +54,7 @@ export function PatientDetailPage() {
 
   const { openModal, addToast } = useUI();
   const { config } = useConfig();
+  const { professional: me, isAdmin } = useAuth();
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
@@ -74,6 +76,19 @@ export function PatientDetailPage() {
         serviceRepository.findActive(),
         professionalRepository.findActive(),
       ]);
+      // A URL direta /patients/:id nao passa pela lista, entao a checagem de
+      // visibilidade tem de acontecer aqui tambem. Sem isso, esconder da lista
+      // nao esconderia nada.
+      if (p && !podeVerPaciente(p, me, isAdmin)) {
+        setPatient(null);
+        setEvolutions([]);
+        setAppointments([]);
+        setConsents([]);
+        setLoading(false);
+        addToast({ type: 'error', message: 'Este paciente está sob a responsabilidade de outro profissional.' });
+        return;
+      }
+
       setPatient(p);
       setEvolutions(evos);
       setAppointments(appts.sort((a, b) => String(b.start).localeCompare(String(a.start))));
@@ -85,7 +100,7 @@ export function PatientDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, me, isAdmin, addToast]);
 
   useEffect(() => {
     load();
@@ -149,8 +164,11 @@ export function PatientDetailPage() {
     return (
       <div className="card">
         <div className="empty">
-          <h4>Paciente não encontrado</h4>
-          <p>O registro pode ter sido removido.</p>
+          <h4>Paciente indisponível</h4>
+          <p>
+            O registro não existe ou está sob a responsabilidade de outro
+            profissional.
+          </p>
         </div>
       </div>
     );

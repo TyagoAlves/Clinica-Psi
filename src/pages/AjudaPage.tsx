@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Users, FileText, Calendar, Stethoscope, Shield,
-  BarChart3, Search, Sparkles, HelpCircle,
+  BarChart3, Search, Sparkles, HelpCircle, UserCog,
 } from 'lucide-react';
 import { refazerTour } from '../services/TourService';
 
@@ -111,6 +111,35 @@ const SECOES: Secao[] = [
       'O controle LGPD lista todos os termos com situação e data.',
       'A lista de frequência mostra atendimentos por status.',
     ],
+  },
+  {
+    id: 'meus-dados',
+    titulo: 'Meus dados e backup',
+    icone: UserCog,
+    resumo: 'Ajustar o próprio acesso e levar uma cópia dos dados embora.',
+    cartoes: [
+      {
+        titulo: 'Meu acesso',
+        texto:
+          'Em Configurações › Meu acesso você corrige nome, e-mail, CRP e função, e troca a sua senha. ' +
+          'A senha atual nunca aparece na tela: para mudá-la, digite a nova nos dois campos e salve.',
+      },
+      {
+        titulo: 'Download e restauração',
+        texto:
+          'Em Configurações › Dados, "Baixar backup" gera um arquivo .json com tudo que está no navegador. ' +
+          '"Restaurar backup" substitui o conteúdo inteiro pelo do arquivo, então exporte antes. ' +
+          'Só a restauração pede a sua senha atual, para ninguém trocar a base por engano.',
+      },
+      {
+        titulo: 'Exportar o que eu registrei',
+        texto:
+          'Em Configurações › Meu acesso, "Exportar meus dados" gera um arquivo só com os pacientes que você ' +
+          'atendeu e as evoluções que escreveu, em formato legível, para conferir ou entregar ao titular.',
+      },
+    ],
+    dica:
+      'Backup é o seu seguro: faça um antes de limpar o histórico do navegador ou trocar de aparelho.',
   },
   {
     id: 'onde-ficam',

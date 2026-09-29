@@ -186,7 +186,9 @@ export const useStore = create<AppStore>()(
       },
 
       updateConfig: async (updates) => {
-        const updated = await clinicService.updateClinic(updates);
+        // updateClinic embrulha o que recebe dentro de `clinic`: usar ele aqui
+        // gravava marca e textos no lugar errado
+        const updated = await clinicService.updateConfig(updates);
         set({ config: updated });
       },
 

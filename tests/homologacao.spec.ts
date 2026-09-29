@@ -36,6 +36,18 @@ async function semApresentacao(page: Page) {
   }
 }
 
+/**
+ * Abre o login com o app já montado.
+ *
+ * main.tsx só desenha a tela depois do bootstrap, e é o bootstrap que popula a
+ * base de demonstração. Mexer no armazenamento antes disso faz o teste chegar
+ * no meio do seed, e o reload seguinte recria os acessos que ele queria tirar.
+ */
+async function abrirLogin(page: Page) {
+  await page.goto('/login');
+  await expect(page.locator('#email')).toBeVisible();
+}
+
 const homologacao = (page: Page) => page.evaluate(() => {
   const cfg = JSON.parse(localStorage.getItem('clinica-psi-config') || '{}');
   return cfg?.homologacao;
@@ -150,7 +162,9 @@ test('em homologação a limpeza total não pede confirmação', async ({ page }
 
   // sem diálogo de confirmação: a ação já rodou
   await expect(page.locator('[role="dialog"]')).toHaveCount(0);
-  await expect(page.locator('.toast', { hasText: 'Dados clínicos apagados' })).toBeVisible();
+  // o próprio entradaEmHomologacao já limpou os dados uma vez, então o aviso
+  // anterior ainda pode estar na tela: o que interessa é o último
+  await expect(page.locator('.toast', { hasText: 'Dados clínicos apagados' }).last()).toBeVisible();
   const pacientes = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('clinica-psi-patients') || '[]').length
   );
@@ -164,6 +178,11 @@ test('em homologação a restauração da demonstração também vai direto', as
   await page.getByRole('button', { name: 'Restaurar demonstração' }).click();
 
   await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+  // a restauração reescreve a base inteira (inclusive os acessos, que agora
+  // entram com hash): sem esperar o aviso, a leitura pega a base ainda vazia
+  await expect(
+    page.locator('.toast', { hasText: 'Dados de demonstração restaurados' }).last()
+  ).toBeVisible();
   // a demo restaura os acessos padrão, então a equipe volta a ter o ana
   const emails = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('clinica-psi-professionals') || '[]').map(
@@ -171,6 +190,14 @@ test('em homologação a restauração da demonstração também vai direto', as
     )
   );
   expect(emails).toContain('ana@clinica.com.br');
+  // e os acessos restaurados não voltam com a senha em texto puro
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('clinica-psi-professionals') || '[]').some(
+        (p: { password?: string; passwordHash?: string }) => p.password || !p.passwordHash
+      )
+    )
+  ).toBe(false);
 });
 
 test('fora da homologação as duas ações ainda pedem confirmação', async ({ page }) => {
@@ -187,7 +214,7 @@ test('fora da homologação as duas ações ainda pedem confirmação', async ({
 });
 
 test('sem nenhum acesso, o login orienta a criar o primeiro', async ({ page }) => {
-  await page.goto('/login');
+  await abrirLogin(page);
   await page.evaluate(() => {
     localStorage.removeItem('clinica-psi-professionals');
     localStorage.removeItem('clinica-psi-session');
@@ -199,16 +226,19 @@ test('sem nenhum acesso, o login orienta a criar o primeiro', async ({ page }) =
   await expect(page.locator('#email')).toHaveCount(0);
   await expect(page.locator('#password')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Criar primeiro acesso' }).click();
+  await page.getByRole('button', { name: 'Cadastrar-se' }).click();
+  // primeiro os dados da pessoa, a clínica vem no passo seguinte
   await expect(page.locator('#first-name')).toBeVisible();
   await expect(page.locator('#first-email')).toBeVisible();
   await expect(page.locator('#first-password')).toBeVisible();
+  await expect(page.locator('#first-confirmar')).toBeVisible();
+  await expect(page.locator('#cli-name')).toHaveCount(0);
   // nenhum valor de senha pré-preenchido
   await expect(page.locator('#first-password')).toHaveValue('');
 });
 
 test('criar o primeiro acesso libera o login e a apresentação', async ({ page }) => {
-  await page.goto('/login');
+  await abrirLogin(page);
   await page.evaluate(() => {
     localStorage.removeItem('clinica-psi-professionals');
     localStorage.removeItem('clinica-psi-session');
@@ -216,44 +246,94 @@ test('criar o primeiro acesso libera o login e a apresentação', async ({ page 
   });
   await page.reload();
 
-  await page.getByRole('button', { name: 'Criar primeiro acesso' }).click();
+  await page.getByRole('button', { name: 'Cadastrar-se' }).click();
   await page.locator('#first-name').fill('Dra. Primeira Psicologa');
   await page.locator('#first-email').fill('primeira@clinica.com.br');
   await page.locator('#first-password').fill('primeira1');
+  await page.locator('#first-confirmar').fill('primeira1');
   await page.locator('#first-crp').fill('CRP 06/11111');
-  await page.getByRole('button', { name: 'Criar acesso e entrar' }).click();
+  await page.getByRole('button', { name: 'Continuar' }).click();
 
-  // "Criar acesso e entrar" ja deixa o sistema pronto para uso
+  // passo 2: a clínica, que entra com o que já foi digitado
+  await expect(page.locator('#cli-name')).toBeVisible();
+  await expect(page.locator('#cli-responsible')).toHaveValue('Dra. Primeira Psicologa');
+  await page.locator('#cli-name').fill('Psicologia Integral');
+  await page.locator('[data-testid="passo-concluir"]').click();
+
+  // "Concluir e entrar" já deixa o sistema pronto para uso
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.locator('.tour')).toBeVisible();
   expect(errors).toEqual([]);
+
+  // o acesso nasce completo, com a senha guardada só como hash
+  const criado = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('clinica-psi-professionals') || '[]')
+  );
+  expect(criado).toHaveLength(1);
+  expect(criado[0].email).toBe('primeira@clinica.com.br');
+  expect(criado[0].admin).toBe(true);
+  expect(criado[0].password).toBeUndefined();
+  expect(criado[0].passwordHash).toContain('pbkdf2-sha256$');
+
+  // a clínica cadastrada no passo 2 é a que aparece no cabeçalho
+  const config = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('clinica-psi-config') || '{}')
+  );
+  expect(config.clinic.name).toBe('Psicologia Integral');
+  expect(config.demo).toBe(false);
 });
 
 test('a criação do primeiro acesso exige nome, e-mail e senha mínima', async ({ page }) => {
-  await page.goto('/login');
+  await abrirLogin(page);
   await page.evaluate(() => {
     localStorage.removeItem('clinica-psi-professionals');
     localStorage.removeItem('clinica-psi-session');
   });
   await page.reload();
 
-  await page.getByRole('button', { name: 'Criar primeiro acesso' }).click();
+  await page.getByRole('button', { name: 'Cadastrar-se' }).click();
   await page.locator('#first-name').fill('Sem Senha');
   await page.locator('#first-email').fill('sem@clinica.com.br');
   await page.locator('#first-password').fill('123');
-  await page.getByRole('button', { name: 'Criar acesso e entrar' }).click();
+  await page.locator('#first-confirmar').fill('123');
+  await page.getByRole('button', { name: 'Continuar' }).click();
 
   await expect(page.getByText('A senha precisa de ao menos 6 caracteres')).toBeVisible();
+  // a clínica nem aparece: o passo 1 não passou
+  await expect(page.locator('#cli-name')).toHaveCount(0);
   // nada foi criado
   expect(await page.evaluate(() => localStorage.getItem('clinica-psi-professionals'))).toBeNull();
 });
 
-test('com equipe cadastrada, o login não oferece criação de acesso', async ({ page }) => {
+test('senhas diferentes barram o cadastro no primeiro passo', async ({ page }) => {
+  await abrirLogin(page);
+  await page.evaluate(() => {
+    localStorage.removeItem('clinica-psi-professionals');
+    localStorage.removeItem('clinica-psi-session');
+  });
+  await page.reload();
+
+  await page.getByRole('button', { name: 'Cadastrar-se' }).click();
+  await page.locator('#first-name').fill('Dra. Senhas Diferentes');
+  await page.locator('#first-email').fill('diferentes@clinica.com.br');
+  await page.locator('#first-password').fill('primeira1');
+  await page.locator('#first-confirmar').fill('segunda22');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+
+  await expect(page.getByText('As senhas não são iguais.')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('clinica-psi-professionals'))).toBeNull();
+});
+
+test('com equipe cadastrada, o login também oferece cadastro', async ({ page }) => {
   await page.goto('/login');
 
+  // o aviso de "nenhum acesso" some, porque há equipe
   await expect(page.getByText('Nenhum acesso cadastrado neste navegador')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Criar primeiro acesso' })).toHaveCount(0);
   await expect(page.locator('#email')).toBeVisible();
+
+  // e mesmo assim dá para criar mais um acesso, sem depender de quem instalou
+  await page.getByRole('button', { name: 'Cadastrar-se' }).click();
+  await expect(page.locator('#first-name')).toBeVisible();
 });
 
 test('a tela de login mostra o erro de credencial inválida', async ({ page }) => {

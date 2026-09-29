@@ -22,6 +22,7 @@ import type {
   Professional,
   Service,
   ServiceColor,
+  UUID,
 } from '../../domain/types';
 
 const COLORS: { value: ServiceColor; label: string }[] = [
@@ -54,7 +55,9 @@ function PatientForm({
 }) {
   const navigate = useNavigate();
   const { addToast } = useUI();
+  const { professional: me, isAdmin } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
+  const [responsaveis, setResponsaveis] = useState<Professional[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -64,6 +67,15 @@ function PatientForm({
       .then(setServices)
       .catch((e) => console.error('Failed to load services:', e));
   }, []);
+
+  // so quem administra pode transferir a responsabilidade de um paciente
+  useEffect(() => {
+    if (!isAdmin) return;
+    professionalRepository
+      .findAll({ orderBy: 'name', orderDir: 'asc' })
+      .then(setResponsaveis)
+      .catch((e) => console.error('Failed to load professionals:', e));
+  }, [isAdmin]);
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -78,6 +90,14 @@ function PatientForm({
       return;
     }
 
+    // UUID e um tipo marcado; o valor vem do <select> como string.
+    const escolhido = (form.professionalId || '').trim() as UUID | '';
+    const responsavel: UUID | undefined = isAdmin
+      ? escolhido || patient?.professionalId
+      : patient
+        ? patient.professionalId
+        : me?.id;
+
     const payload = {
       name,
       phone: form.phone.trim(),
@@ -90,6 +110,9 @@ function PatientForm({
       status: (form.status || 'active') as PatientStatus,
       startDate: form.startDate || isoToday(),
       description: form.description.trim(),
+      // `undefined` limpa o campo no repositorio (o update faz spread), que e o
+      // que a opcao "sem responsavel" precisa fazer.
+      professionalId: isAdmin ? responsavel : (patient ? patient.professionalId : me?.id),
     };
 
     try {
@@ -183,6 +206,26 @@ function PatientForm({
             ))}
           </select>
         </div>
+        {isAdmin && (
+          <div className="form-field">
+            <label className="form-label" htmlFor="np-profissional">
+              Profissional responsável
+            </label>
+            <select
+              className="form-select"
+              id="np-profissional"
+              name="professionalId"
+              defaultValue={patient?.professionalId || me?.id || ''}
+            >
+              <option value="">Sem responsável definido</option>
+              {responsaveis.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="form-field">

@@ -11,7 +11,7 @@ test('estrutura e estilos das telas', async ({ page }) => {
   await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  // depois do reload: a apresentacao reabre e bloqueia os cliques
+  // depois do reload: o tour reabre e bloqueia os cliques
   await semApresentacao(page);
   await page.reload();
 

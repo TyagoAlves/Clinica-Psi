@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useConfig, useUI } from '../store';
+import { useConfig, useUI, useAuth } from '../store';
+import { pacientesVisiveis } from '../services/AccessService';
 import {
   appointmentRepository,
   consentRepository,
@@ -42,6 +43,7 @@ export function ReportsPage() {
   const { addToast } = useUI();
 
   const [patients, setPatients] = useState<Patient[]>([]);
+  const { professional: me, isAdmin } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
@@ -60,7 +62,8 @@ export function ReportsPage() {
         consentRepository.findAll({ orderBy: 'signedAt', orderDir: 'desc' }),
         appointmentRepository.findAll({ orderBy: 'start', orderDir: 'asc' }),
       ]);
-      setPatients(p);
+      // o relatorio de um colega nao entra no relatorio de quem nao administra
+      setPatients(pacientesVisiveis(p, me, isAdmin));
       setServices(s);
       setProfessionals(pro);
       setEvolutions(evo);
@@ -71,7 +74,7 @@ export function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, me, isAdmin]);
 
   useEffect(() => {
     void load();

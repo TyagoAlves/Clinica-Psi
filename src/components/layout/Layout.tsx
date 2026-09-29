@@ -43,9 +43,12 @@ const TITLES: Record<string, [string, string]> = {
   '/reports': ['Relatórios', 'Documentos prontos para gerar em PDF'],
   '/ajuda': ['Ajuda', 'Como usar o sistema, área por área'],
   '/admin': ['Configurações', 'Identidade, textos, termos, equipe e dados'],
+  '/admin-restrito': ['Configurações', 'Seus dados e backup do sistema'],
 };
 
-function resolveTitle(pathname: string): [string, string] {
+function resolveTitle(pathname: string, isAdmin: boolean): [string, string] {
+  // na mesma rota, quem nao administra ve outra legenda
+  if (pathname === '/admin') return isAdmin ? TITLES['/admin'] : TITLES['/admin-restrito'];
   if (TITLES[pathname]) return TITLES[pathname];
   if (pathname.startsWith('/patients/')) return TITLES['/patients/'];
   if (pathname.startsWith('/evolution')) return TITLES['/evolution'];
@@ -94,7 +97,10 @@ export function Layout() {
   const { config } = useConfig();
   const { patientsFilter, setPatientsFilter } = useData();
 
-  const [title, subtitle] = useMemo(() => resolveTitle(location.pathname), [location.pathname]);
+  const [title, subtitle] = useMemo(
+    () => resolveTitle(location.pathname, isAdmin),
+    [location.pathname, isAdmin]
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -145,17 +151,15 @@ export function Layout() {
             </NavLink>
           ))}
 
-          {isAdmin && (
-            <NavLink
-              to={ADMIN_NAV.path}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <span className="nav-ico">
-                <Icon name={ADMIN_NAV.icon} />
-              </span>
-              {ADMIN_NAV.label}
-            </NavLink>
-          )}
+          <NavLink
+            to={ADMIN_NAV.path}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <span className="nav-ico">
+              <Icon name={ADMIN_NAV.icon} />
+            </span>
+            {ADMIN_NAV.label}
+          </NavLink>
         </nav>
 
         <div className="sidebar-user">

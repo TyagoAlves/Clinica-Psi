@@ -29,8 +29,14 @@ import './styles/globals.css';
 // mantem o deep link no hash; na web o BrowserRouter continua valendo.
 const Router = isTauri() ? HashRouter : BrowserRouter;
 
-function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { isAuthenticated, isAdmin, checkAuth } = useAuth();
+/**
+ * So exige sessao. `/admin` nao e mais restrito a administradores: quem nao e
+ * administrador entra na tela, mas so enxerga as abas "Meu acesso" e "Dados".
+ * O filtro acontece em `AdminPage`, que nao renderiza o corpo das abas
+ * restritas - esconder o botao sozinho nao impede a aba de abrir.
+ */
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, checkAuth } = useAuth();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -53,10 +59,6 @@ function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; 
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   return <>{children}</>;
 }
 
@@ -75,7 +77,7 @@ function AppRoutes() {
         <Route path="/lgpd" element={<LGPDPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/ajuda" element={<AjudaPage />} />
-        <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
