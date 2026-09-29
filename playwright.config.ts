@@ -22,6 +22,18 @@ export default defineConfig({
    * PLAYWRIGHT_WORKERS sobrescreve quando a maquina aguentar mais.
    */
   workers: Number(process.env.PLAYWRIGHT_WORKERS) || 3,
+  /**
+   * A Agenda desenha o cabecalho da lista antes das sessoes chegarem do
+   * repositorio, e varias assercoes contam itens de uma vez. Com a janela
+   * padrao de 5s isso passa a falhar na maquina virtual do CI, que e varias
+   * vezes mais lenta que a de desenvolvimento. Os 15s sao folga para a
+   * corrida de render, nao para esconder bug: erro deterministico continua
+   * falhando nas repeticoes.
+   */
+  expect: {
+    timeout: Number(process.env.PLAYWRIGHT_EXPECT_TIMEOUT) || 15_000,
+  },
+  timeout: Number(process.env.PLAYWRIGHT_TIMEOUT) || 60_000,
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',

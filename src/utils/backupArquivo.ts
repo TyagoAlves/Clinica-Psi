@@ -7,15 +7,31 @@
  * `<input type="file">`, que e o que a suite Playwright exercita.
  */
 
-import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
-import { open, save } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './tauri';
 
 const JSON_FILTER = [{ name: 'Backup JSON', extensions: ['json'] }];
 
+/**
+ * Os plugins entram por `import()` e nao no topo do arquivo. Importados
+ * estaticamente eles seriam pre-empacotados pelo Vite tambem na versao web,
+ * onde nunca sao usados: no dev server isso dispara a reotimizacao de
+ * dependencias no meio de um teste e recarrega a pagina.
+ */
+async function dialogo() {
+  return import('@tauri-apps/plugin-dialog');
+}
+
+async function arquivos() {
+  return import('@tauri-apps/plugin-fs');
+}
+
+async function ipc() {
+  return import('@tauri-apps/api/core');
+}
+
 /** O escopo do `fs` so aceita o que foi liberado antes da operacao. */
 async function autorizar(caminho: string): Promise<void> {
+  const { invoke } = await ipc();
   await invoke('allow_fs_path', { path: caminho });
 }
 
@@ -29,6 +45,7 @@ export async function salvarArquivo(
 ): Promise<string | null> {
   if (!isTauri()) throw new Error('DIALOGO_DISPONIVEL_SOMENTE_NO_APP_EMBALADO');
 
+  const { save } = await dialogo();
   const caminho = await save({
     defaultPath: nomeSugerido,
     filters: JSON_FILTER,
@@ -36,6 +53,7 @@ export async function salvarArquivo(
   if (!caminho) return null;
 
   await autorizar(caminho);
+  const { writeTextFile } = await arquivos();
   await writeTextFile(caminho, conteudo);
   return caminho;
 }
@@ -44,9 +62,12 @@ export async function salvarArquivo(
 export async function abrirArquivo(): Promise<string | null> {
   if (!isTauri()) throw new Error('DIALOGO_DISPONIVEL_SOMENTE_NO_APP_EMBALADO');
 
+  const { open } = await dialogo();
   const caminho = await open({ multiple: false, filters: JSON_FILTER });
   if (typeof caminho !== 'string') return null;
 
   await autorizar(caminho);
+  const { readTextFile } = await arquivos();
   return readTextFile(caminho);
 }
+

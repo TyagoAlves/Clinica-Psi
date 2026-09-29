@@ -14,7 +14,6 @@
  * as chaves fiquem identicas entre o app empacotado e a versao web.
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import type { StorageAdapter } from './StoragePort';
 import type { BackupData } from '../domain/types';
 
@@ -22,6 +21,15 @@ interface StorageUsage {
   used: number;
   quota: number;
   percentage: number;
+}
+
+/**
+ * O `invoke` do Tauri entra sob demanda. Importado no topo ele faria o Vite
+ * pre-empacotar `@tauri-apps/api` tambem na versao web, que nunca fala com o
+ * SQLite, e a reotimizacao de dependencia recarrega a pagina no meio do teste.
+ */
+async function ipc() {
+  return import('@tauri-apps/api/core');
 }
 
 export class SqliteAdapter implements StorageAdapter {
@@ -35,33 +43,38 @@ export class SqliteAdapter implements StorageAdapter {
     return key.startsWith(this.prefix) ? key.slice(this.prefix.length) : key;
   }
 
+  private async call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    const { invoke } = await ipc();
+    return invoke<T>(cmd, args);
+  }
+
   async get<T>(key: string): Promise<T | null> {
-    const raw = await invoke<string | null>('kv_get', { key: this.prefixed(key) });
+    const raw = await this.call<string | null>('kv_get', { key: this.prefixed(key) });
     return raw === null ? null : (JSON.parse(raw) as T);
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    await invoke('kv_set', { key: this.prefixed(key), value: JSON.stringify(value) });
+    await this.call('kv_set', { key: this.prefixed(key), value: JSON.stringify(value) });
   }
 
   async remove(key: string): Promise<void> {
-    await invoke('kv_remove', { key: this.prefixed(key) });
+    await this.call('kv_remove', { key: this.prefixed(key) });
   }
 
   async clear(): Promise<void> {
     const keys = await this.listKeys();
-    await Promise.all(keys.map(key => invoke('kv_remove', { key: this.prefixed(key) })));
+    await Promise.all(keys.map(key => this.call('kv_remove', { key: this.prefixed(key) })));
   }
 
   async listKeys(): Promise<string[]> {
-    const keys = await invoke<string[]>('kv_keys');
+    const keys = await this.call<string[]>('kv_keys');
     return keys.map(k => this.unprefixed(k));
   }
 
   async getAll(keys: string[]): Promise<Record<string, unknown>> {
     if (keys.length === 0) return {};
     const prefixed = keys.map(k => this.prefixed(k));
-    const raw = await invoke<Record<string, string>>('kv_get_all', { keys: prefixed });
+    const raw = await this.call<Record<string, string>>('kv_get_all', { keys: prefixed });
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(raw)) {
       result[this.unprefixed(key)] = JSON.parse(value);
@@ -74,7 +87,7 @@ export class SqliteAdapter implements StorageAdapter {
     for (const [key, value] of Object.entries(entries)) {
       payload[this.prefixed(key)] = JSON.stringify(value);
     }
-    await invoke('kv_set_all', { entries: payload });
+    await this.call('kv_set_all', { entries: payload });
   }
 
   async exportBackup(): Promise<BackupData> {
@@ -88,13 +101,12 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async getUsage(): Promise<{ used: number; quota: number; percentage: number }> {
-    const usage = await invoke<StorageUsage>('kv_usage');
-    return { used: usage.used, quota: usage.quota, percentage: usage.percentage };
+    return this.call<StorageUsage>('kv_usage');
   }
 
   /** Caminho do arquivo .db, para o usuario localizar a base na maquina. */
   async path(): Promise<string> {
-    return invoke<string>('kv_path');
+    return this.call<string>('kv_path');
   }
 }
 
