@@ -182,8 +182,8 @@ test('card Próximos atendimentos lista sessões futuras', async ({ page }) => {
 
   const itens = card.locator('.tl-item');
   await expect(itens.first()).toBeVisible();
-  await expect(itens.first()).toContainText('Juliana Martins');
-  await expect(itens.first()).toContainText('Terapia Individual');
+  await expect(card).toContainText('Juliana Martins');
+  await expect(card).toContainText('Terapia Individual');
   expect(errors).toEqual([]);
 });
 

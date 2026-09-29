@@ -9,6 +9,10 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # app e para o Brasil: fixar o fuso faz o runner reproduzir a maquina do
+      # dev e exercitar o offset negativo (UTC-3) que os testes de fuso cobrem.
+      TZ: America/Sao_Paulo
 
     steps:
       - name: Checkout code
